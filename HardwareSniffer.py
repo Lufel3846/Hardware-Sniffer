@@ -146,8 +146,11 @@ class HardwareSniffer:
         except Exception as e:
             print(f"Error exporting report: {e}", file=sys.stderr)
             traceback.print_exc()
+            print("")
+            return False
 
         print("")
+        return True
 
     def get_latest_acpidump(self):
         return "https://github.com/acpica/acpica/releases/download/R2024_12_12/acpidump.exe"
@@ -209,7 +212,7 @@ class HardwareSniffer:
             os.chdir(cwd)
             if out[2] != 0:
                 print(" - {}".format(out[1]))
-                return
+                return False
             print("Updating names...")
 
             table_paths = self.u.find_matching_paths(acpi_dir, extension_filter=".dat")
@@ -222,13 +225,13 @@ class HardwareSniffer:
             table_dir = "/sys/firmware/acpi/tables"
             if not os.path.isdir(table_dir):
                 print("Could not locate {}!".format(table_dir))
-                return
+                return False
             
             tables = self.u.find_matching_paths(table_dir, type_filter="file")
             if not tables:
                 print(" - No tables found!")
                 print("")
-                return
+                return False
             
             for table_path, type in tables:
                 destination_path = os.path.join(acpi_dir, table_path.upper() + ".aml")
@@ -239,18 +242,19 @@ class HardwareSniffer:
                 })
                 if out[2] != 0:
                     print(" - {}".format(out[1]))
-                    return
+                    return False
                 
                 out = self.run({
                     "args": ["sudo", "chown", getpass.getuser(), destination_path]
                 })
                 if out[2] != 0:
                     print(" - {}".format(out[1]))
-                    return
+                    return False
 
         print("")
         print("ACPI tables dumped successfully.")
         print("")
+        return True
 
     def main(self):
         self.hardware_info.hardware_collector()

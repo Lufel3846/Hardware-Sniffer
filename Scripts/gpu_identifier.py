@@ -186,6 +186,19 @@ class GPUIdentifier:
             "Device Type": "Unknown" if not gpu_codename else device_type
         }
 
+    def identify_nvidia_codename_by_prefix(self, device_id):
+        if device_id.startswith(("0FC", "0FD", "0FE", "0FF", "100", "101", "102", "103", "11", "128", "129", "12A", "12B", "130")) and device_id != "1140":
+            return "Kepler"
+        elif device_id.startswith(("05E", "05F", "0A2", "0A3", "0A6", "0A7", "0C", "10C", "10D")):
+            return "Tesla"
+        elif device_id.startswith(("06C", "06D", "0DC", "0DD", "0DE", "0DF", "0E2", "0E3", "0F0", "104", "105", "107", "108", "109", "114", "120", "121", "124", "125")):
+            return "Fermi"
+        elif device_id.startswith(("13", "14", "16", "17")) and not device_id.startswith("172"):
+            return "Maxwell"
+        elif device_id.startswith(("15", "172", "1B", "1C", "1D0", "1D1", "1D3", "1D5")):
+            return "Pascal"
+        return None
+
     def identify_nvidia_graphics(self, hardware_id):
         gpu_codename = None
         device_id = hardware_id[5:]
@@ -194,6 +207,9 @@ class GPUIdentifier:
             if device_id in device_ids:
                 gpu_codename = codename
                 break
+
+        if not gpu_codename:
+            gpu_codename = self.identify_nvidia_codename_by_prefix(device_id)
 
         return {
             "Manufacturer": "NVIDIA",

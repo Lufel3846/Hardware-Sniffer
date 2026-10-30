@@ -28,7 +28,7 @@ class ResourceFetcher:
             ssl_context = ssl.create_default_context(cafile=cafile)
         except Exception as e:
             print("SSL Context Creation Error: {}".format(e))
-            ssl_context = ssl._create_unverified_context()
+            ssl_context = ssl.create_default_context()
         return ssl_context
 
     def is_connected(self, timeout=5):

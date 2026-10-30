@@ -9,6 +9,7 @@ import os
 
 PCI_DEVICES_PATH = "/sys/bus/pci/devices"
 USB_DEVICES_PATH = "/sys/bus/usb/devices"
+SECURE_BOOT_EFIVAR_PATH = "/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 
 class LinuxHardwareInfo:
     def __init__(self, rich_format=True):
@@ -228,7 +229,7 @@ class LinuxHardwareInfo:
         else:
             bios_info["Firmware Type"] = "BIOS"
 
-        bios_info["Secure Boot"] = "Enabled" if self.format_value(self.utils.read_file("/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c") or "0", "int") else "Disabled"
+        bios_info["Secure Boot"] = self.get_secure_boot_state()
         bios_info["Above 4G Decoding"] = "Disabled"
 
         for class_name in self.devices_by_class:
@@ -253,6 +254,19 @@ class LinuxHardwareInfo:
 
         return bios_info
     
+    def get_secure_boot_state(self, efivar_path=SECURE_BOOT_EFIVAR_PATH):
+        try:
+            with open(efivar_path, "rb") as efivar_file:
+                data = efivar_file.read()
+        except OSError:
+            return "Disabled"
+
+        # efivarfs prefixes the variable data with 4 bytes of attributes
+        if len(data) < 5:
+            return "Disabled"
+
+        return "Enabled" if data[4] == 1 else "Disabled"
+
     def get_simd_features(self, flags):
         simd_features_required = ["SSE", "SSE2", "SSE3", "SSSE3", "SSE4.1", "SSE4.2", "SSE4a", "AVX", "AVX2"]
         simd_feature_support = []
@@ -275,10 +289,12 @@ class LinuxHardwareInfo:
         number_of_cores = 0
         flags = None
         cpu_count = -1
+        physical_cores = set()
 
         for cpu_core in cpu_cores:
             if cpu_core:
                 number_of_cores += 1
+                physical_id = core_id = None
                 for line in cpu_core.splitlines():
                     if not all((cpu_brand, cpu_family, model, cpu_model, stepping, flags)):
                         if "vendor_id" in line:
@@ -295,7 +311,16 @@ class LinuxHardwareInfo:
                             flags = line.split(":")[-1].strip()
                     
                     if "physical id" in line:
-                        cpu_count = int(line.split(":")[-1].strip())
+                        physical_id = line.split(":")[-1].strip()
+                        cpu_count = max(cpu_count, int(physical_id))
+                    elif "core id" in line:
+                        core_id = line.split(":")[-1].strip()
+
+                if core_id is not None:
+                    physical_cores.add((physical_id, core_id))
+
+        if physical_cores:
+            number_of_cores = len(physical_cores)
 
         if all((cpu_brand, cpu_family, model, cpu_model, stepping, flags)):
             cpu_description = "Family {} Model {} Stepping {}".format(cpu_family, model, stepping)

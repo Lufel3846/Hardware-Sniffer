@@ -38,14 +38,16 @@ def main():
         return EXIT_HARDWARE_COLLECTION_ERROR
 
     try:
-        h.export_hardware_report()
+        if not h.export_hardware_report():
+            return EXIT_REPORT_GENERATION_ERROR
     except Exception as e:
         print(f"Error saving report: {e}", file=sys.stderr)
         traceback.print_exc()
         return EXIT_REPORT_GENERATION_ERROR
 
     try:
-        h.dump_acpi_tables()
+        if not h.dump_acpi_tables():
+            return EXIT_ACPI_DUMP_ERROR
     except Exception as e:
         print(f"Error dumping ACPI tables: {e}", file=sys.stderr)
         traceback.print_exc()
