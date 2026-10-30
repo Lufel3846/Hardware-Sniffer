@@ -11,8 +11,19 @@ import shutil
 import traceback
 import sys
 import getpass
+import hashlib
 
 os_name = platform.system()
+
+ACPIDUMP_URL = "https://github.com/acpica/acpica/releases/download/R2024_12_12/acpidump.exe"
+ACPIDUMP_SHA256 = "9f54227f9f7dccbf1fbc652f05d342e7525d5de0861905bfef05254064a07fd4"
+
+def get_sha256(file_path):
+    sha256 = hashlib.sha256()
+    with open(file_path, "rb") as file_handle:
+        for block in iter(lambda: file_handle.read(65536), b""):
+            sha256.update(block)
+    return sha256.hexdigest()
 
 class HardwareSniffer:
     def __init__(self, result_dir="SysReport", rich_format=True):
@@ -152,40 +163,37 @@ class HardwareSniffer:
         print("")
         return True
 
-    def get_latest_acpidump(self):
-        return "https://github.com/acpica/acpica/releases/download/R2024_12_12/acpidump.exe"
-
-        latest_release = self.github.get_latest_release("acpica", "acpica") or {}
-        
-        for asset in latest_release.get("assets"):
-            if asset.get("product_name") == "acpidump":
-                return asset.get("url")
-            
-        return None
+    def is_trusted_acpidump(self, acpidump_path):
+        try:
+            return get_sha256(acpidump_path) == ACPIDUMP_SHA256
+        except OSError:
+            return False
 
     def check_acpidump(self):
         acpidump_path = os.path.join(os.getcwd(), "acpidump.exe")
 
         if os.path.exists(acpidump_path):
-            return acpidump_path
+            if self.is_trusted_acpidump(acpidump_path):
+                return acpidump_path
+            print("Existing acpidump.exe does not match the pinned SHA256, downloading it again...")
+            os.remove(acpidump_path)
         
         self.u.head("Gathering Files")
         print("")
         print("Please wait for download acpidump...")
         
-        acpidump_download_link = self.get_latest_acpidump()
-        if not acpidump_download_link: 
-            raise Exception("Could not find download URL for acpidump.exe.")
-        
         try:
-            self.fetcher.download_and_save_file(acpidump_download_link, acpidump_path)
+            self.fetcher.download_and_save_file(ACPIDUMP_URL, acpidump_path)
+        except Exception:
+            pass
 
-            if not os.path.exists(acpidump_path):
-                raise Exception("Failed to download acpidump.exe.")
-        except:
-            raise Exception("Could not locate or download acpidump.exe!\n\nPlease manually download acpidump.exe from:\n - {}\n\nAnd place in:\n - {}\n".format(
-                "https://github.com/acpica/acpica/releases",
-                os.path.dirname(os.path.realpath(__file__))
+        if not os.path.exists(acpidump_path) or not self.is_trusted_acpidump(acpidump_path):
+            if os.path.exists(acpidump_path):
+                os.remove(acpidump_path)
+            raise Exception("Could not download a verified acpidump.exe!\n\nPlease manually download acpidump.exe from:\n - {}\n\nCheck that its SHA256 is:\n - {}\n\nAnd place in:\n - {}\n".format(
+                ACPIDUMP_URL,
+                ACPIDUMP_SHA256,
+                os.getcwd()
             ))
             
         shutil.rmtree(self.temporary_dir, ignore_errors=True)
